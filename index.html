@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workout Tracker</title>
+  <link rel="icon" type="image/svg+xml" href="logo.svg" />
+
+  <!-- ============================================================
+       FIREBASE SDK (v10 compat build via CDN)
+  ============================================================ -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- Firebase config dari file terpisah (di-gitignore) -->
+  <script src="firebase-config.js"></script>
+
+  <style>
+    /* ============================================================
+       CSS CUSTOM PROPERTIES — Dark Theme (UNCHANGED)
+    ============================================================ */
+    :root {
+      --bg-primary:    #111111;
+      --bg-secondary:  #1a1a1a;
+      --bg-card:       #222222;
+      --text-primary:  #ffffff;
+      --text-secondary:#aaaaaa;
+      --accent:        #ff6b00;
+      --accent-alt:    #39ff14;
+      --border:        #333333;
+      --success:       #4caf50;
+      --danger:        #e53935;
+      --info:          #2196f3;
+      --radius:        14px;
+      --radius-sm:     8px;
+      --shadow:        0 4px 20px rgba(0, 0, 0, 0.5);
+      --shadow-hover:  0 8px 32px rgba(255, 107, 0, 0.15);
+      --transition:    0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-fast: 0.15s ease;
+    }
+
+    /* ============================================================
+       RESET & BASE (polished)
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      line-height: 1.6;
+      letter-spacing: -0.01em;
+    }
+    a { color: var(--accent); text-decoration: none; transition: opacity var(--transition-fast); }
+    a:hover { opacity: 0.8; }
+    button {
+      font-family: inherit; cursor: pointer; border: none; outline: none;
+      transition: all var(--transition);
+    }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    button:active { transform: scale(0.97); }
+    input, select {
+      font-family: inherit;
+      background-color: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem 0.75rem;
+      transition: all var(--transition);
+      font-size: 0.9rem;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,107,0,0.15); }
+
+    .app-container { max-width: 1400px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+
+    /* ============================================================
+       ANIMATIONS
+    ============================================================ */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+
+    /* ============================================================
+       BANNERS
+    ============================================================ */
+    .banner-warning {
+      background: linear-gradient(135deg, #7a3a00, #5c2c00);
+      color: var(--text-primary);
+      text-align: center; padding: 0.7rem 1.25rem; font-size: 0.85rem;
+      display: none; font-weight: 500;
+    }
+    .banner-warning.visible { display: block; animation: fadeIn 0.3s ease; }
+
+    .banner-info {
+      background: linear-gradient(135deg, #0d3b6e, #0a2d52);
+      color: var(--text-primary);
+      text-align: center; padding: 0.6rem 1.25rem; font-size: 0.82rem;
+      display: none; font-weight: 500;
+    }
+    .banner-info.visible { display: block; animation: fadeIn 0.3s ease; }
+
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    .app-header {
+      background-color: rgba(26, 26, 26, 0.95);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(51, 51, 51, 0.6);
+      position: sticky; top: 0; z-index: 100;
+    }
+    .header-inner {
+      max-width: 1400px; margin: 0 auto;
+      padding: 0.85rem 1.25rem;
+      display: flex; align-items: center;
+      justify-content: space-between;
+      gap: 1rem; flex-wrap: wrap;
+    }
+    .app-title {
+      font-size: 1.35rem; font-weight: 800; color: var(--accent);
+      letter-spacing: -0.02em; white-space: nowrap;
+      text-shadow: 0 0 20px rgba(255,107,0,0.3);
+    }
+    .header-controls { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+
+    .btn-lang {
+      background-color: var(--bg-card); color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 0.35rem 0.95rem; font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .btn-lang:hover { border-color: var(--accent); color: var(--accent); background-color: rgba(255,107,0,0.08); }
+
+    /* ---- Auth button ---- */
+    .btn-auth {
+      display: flex; align-items: center; gap: 0.5rem;
+      border-radius: 22px; padding: 0.35rem 1rem;
+      font-size: 0.8rem; font-weight: 600;
+      border: 1px solid var(--border);
+    }
+    .btn-auth.sign-in {
+      background-color: #ffffff; color: #333;
+      border-color: #ddd; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .btn-auth.sign-in:hover { background-color: #f5f5f5; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .btn-auth.sign-out {
+      background-color: transparent; color: var(--text-secondary);
+      border-color: var(--border);
+    }
+    .btn-auth.sign-out:hover { border-color: var(--danger); color: var(--danger); background-color: rgba(229,57,53,0.08); }
+    .btn-auth img { width: 16px; height: 16px; }
+
+    /* ---- User avatar / display ---- */
+    .user-info {
+      display: flex; align-items: center; gap: 0.5rem;
+      font-size: 0.8rem; color: var(--text-secondary);
+    }
+    .user-avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2px solid var(--accent); box-shadow: 0 0 8px rgba(255,107,0,0.3);
+    }
+    .sync-indicator {
+      font-size: 0.72rem; color: var(--accent-alt);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    /* ============================================================
+       PRESET SELECTOR
+    ============================================================ */
+    #preset-selector { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .preset-select {
+      min-width: 180px; font-size: 0.88rem;
+      border-radius: 22px; padding: 0.4rem 1rem;
+      background-color: var(--bg-card);
+    }
+    .btn-add-preset {
+      background: linear-gradient(135deg, var(--accent), #e05500);
+      color: var(--text-primary);
+      border-radius: 22px; padding: 0.45rem 1rem; font-size: 0.82rem; font-weight: 700;
+      box-shadow: 0 2px 10px rgba(255,107,0,0.3);
+    }
+    .btn-add-preset:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,107,0,0.4); }
+    .btn-delete-preset {
+      background-color: transparent; color: var(--danger);
+      border: 1px solid var(--danger); border-radius: 22px;
+      padding: 0.4rem 0.9rem; font-size: 0.82rem; font-weight: 600;
+    }
+    .btn-delete-preset:hover { background-color: var(--danger); color: var(--text-primary); }
+
+    /* ============================================================
+       TAB NAVIGATION (pill style)
+    ============================================================ */
+    .app-main { padding-top: 1.75rem; }
+    #tab-nav {
+      display: inline-flex; gap: 0.25rem;
+      background: var(--bg-secondary); border-radius: 28px;
+      padding: 0.25rem; margin-bottom: 1.5rem;
+      border: 1px solid var(--border);
+    }
+    .tab-btn {
+      background-color: transparent; color: var(--text-secondary);
+      padding: 0.55rem 1.5rem; font-size: 0.9rem; font-weight: 600;
+      border-radius: 24px; border-bottom: none; margin-bottom: 0;
+      transition: all var(--transition);
+    }
+    .tab-btn:hover { color: var(--text-primary); background-color: rgba(255,255,255,0.05); }
+    .tab-btn.active {
+      color: var(--text-primary);
+      background: linear-gradient(135deg, var(--accent), #e05500);
+      box-shadow: 0 2px 10px rgba(255,107,0,0.3);
+    }
+
+    /* ============================================================
+       EXERCISE CARD GRID
+    ============================================================ */
+    #exercise-grid { display: grid; grid-template-columns: 1fr; gap: 1.1rem; }
+    @media (min-width: 768px)  { #exercise-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (min-width: 1200px) { #exercise-grid { grid-template-columns: repeat(3, 1fr); } }
+
+    /* ============================================================
+       EXERCISE CARD (premium feel)
+    ============================================================ */
+    .exercise-card {
+      background: linear-gradient(145deg, var(--bg-card), #1d1d1d);
+      border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.25rem 1.35rem;
+      box-shadow: var(--shadow);
+      display: flex; flex-direction: column; gap: 0.85rem;
+      transition: all var(--transition);
+      animation: fadeInUp 0.4s ease backwards;
+    }
+    .exercise-card:nth-child(1) { animation-delay: 0s; }
+    .exercise-card:nth-child(2) { animation-delay: 0.05s; }
+    .exercise-card:nth-child(3) { animation-delay: 0.1s; }
+    .exercise-card:nth-child(4) { animation-delay: 0.15s; }
+    .exercise-card:nth-child(5) { animation-delay: 0.2s; }
+    .exercise-card:hover {
+      border-color: var(--accent); transform: translateY(-3px);
+      box-shadow: var(--shadow-hover);
+    }
+    .exercise-card.done {
+      opacity: 0.55; border-color: var(--success);
+      background: linear-gradient(145deg, rgba(76,175,80,0.05), var(--bg-card));
+    }
+
+    .exercise-card-header {
+      display: flex; align-items: flex-start;
+      justify-content: space-between; gap: 0.5rem;
+    }
+    .exercise-name { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); flex: 1; line-height: 1.3; }
+    .exercise-checkbox {
+      width: 1.2rem; height: 1.2rem; accent-color: var(--success);
+      cursor: pointer; flex-shrink: 0; margin-top: 2px;
+      transition: transform var(--transition-fast);
+    }
+    .exercise-checkbox:hover { transform: scale(1.15); }
+
+    /* ---- Rep/Time display ---- */
+    .rep-display {
+      font-size: 1.75rem; font-weight: 800; color: var(--accent); line-height: 1;
+      text-shadow: 0 0 12px rgba(255,107,0,0.2);
+    }
+    .rep-unit { font-size: 0.78rem; color: var(--text-secondary); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+    /* ---- Timer control ---- */
+    .timer-control { display: flex; flex-direction: column; gap: 0.6rem; }
+    .timer-display {
+      font-size: 2.2rem; font-weight: 800; color: var(--accent-alt);
+      letter-spacing: 0.02em; line-height: 1; font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 16px rgba(57,255,20,0.3);
+    }
+    .timer-display.done { color: var(--success); font-size: 1.1rem; text-shadow: none; }
+    .timer-buttons { display: flex; gap: 0.45rem; flex-wrap: wrap; }
+    .btn-timer {
+      background-color: var(--bg-secondary); color: var(--text-primary);
+      border: 1px solid var(--border); border-radius: 20px;
+      padding: 0.35rem 0.9rem; font-size: 0.78rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .btn-timer:hover { background-color: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-timer.btn-start {
+      background: linear-gradient(135deg, var(--accent), #e05500);
+      border-color: var(--accent); color: #fff;
+      box-shadow: 0 2px 8px rgba(255,107,0,0.3);
+    }
+    .btn-timer.btn-start:hover { box-shadow: 0 4px 14px rgba(255,107,0,0.5); transform: translateY(-1px); }
+
+    /* ---- Watch button ---- */
+    .btn-watch {
+      background-color: transparent; color: var(--accent);
+      border: 1px solid var(--accent); border-radius: 20px;
+      padding: 0.4rem 0.9rem; font-size: 0.78rem; font-weight: 700; align-self: flex-start;
+      text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .btn-watch:hover { background-color: var(--accent); color: #fff; box-shadow: 0 2px 10px rgba(255,107,0,0.3); }
+
+    /* ============================================================
+       BOTTOM PANELS (polished)
+    ============================================================ */
+    .panels-row { display: grid; grid-template-columns: 1fr; gap: 1.25rem; margin-top: 2rem; }
+    @media (min-width: 768px) { .panels-row { grid-template-columns: 1fr 1fr; } }
+
+    #weekly-tracker {
+      background: linear-gradient(145deg, var(--bg-card), #1d1d1d);
+      border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem;
+      box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 1rem;
+    }
+    .panel-title {
+      font-size: 1.05rem; font-weight: 800; color: var(--text-primary);
+      padding-bottom: 0.6rem; margin-bottom: 0.25rem;
+      border-bottom: 1px solid rgba(51,51,51,0.6);
+      letter-spacing: -0.01em;
+    }
+    .target-row { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+    .target-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; }
+    .target-input { width: 4.5rem; text-align: center; font-size: 0.95rem; font-weight: 700; border-radius: 20px; }
+    .progress-label { font-size: 0.85rem; color: var(--text-secondary); font-weight: 500; }
+    .progress-bar-wrap {
+      background-color: var(--bg-secondary); border-radius: 999px; height: 12px; overflow: hidden;
+      box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), #ff8c33);
+      border-radius: 999px; width: 0%;
+      transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 0 8px rgba(255,107,0,0.4);
+    }
+    .achievement-msg {
+      font-size: 0.95rem; font-weight: 700; color: var(--accent-alt); display: none;
+      text-shadow: 0 0 10px rgba(57,255,20,0.3);
+    }
+    .achievement-msg.visible { display: block; animation: fadeInUp 0.4s ease; }
+    .session-buttons { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+    .btn-complete-session {
+      background: linear-gradient(135deg, var(--accent), #e05500);
+      color: var(--text-primary);
+      border-radius: 22px; padding: 0.55rem 1.25rem; font-size: 0.88rem; font-weight: 700;
+      box-shadow: 0 2px 10px rgba(255,107,0,0.3);
+    }
+    .btn-complete-session:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,107,0,0.4); }
+    .btn-new-week {
+      background-color: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 22px;
+      padding: 0.55rem 1.25rem; font-size: 0.88rem; font-weight: 600;
+    }
+    .btn-new-week:hover { border-color: var(--text-primary); color: var(--text-primary); background-color: rgba(255,255,255,0.03); }
+
+    /* ---- Cloud sync badge ---- */
+    .sync-badge {
+      font-size: 0.72rem; color: var(--info); font-weight: 600;
+      display: inline-flex; align-items: center; gap: 0.3rem;
+    }
+
+    #history-panel {
+      background: linear-gradient(145deg, var(--bg-card), #1d1d1d);
+      border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem;
+      box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 0.85rem;
+    }
+    .history-list {
+      display: flex; flex-direction: column; gap: 0.5rem;
+      max-height: 240px; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .history-entry {
+      background-color: var(--bg-secondary); border-radius: var(--radius-sm);
+      padding: 0.6rem 0.85rem; font-size: 0.82rem; color: var(--text-secondary);
+      display: flex; justify-content: space-between; align-items: center; gap: 0.5rem;
+      transition: background-color var(--transition-fast);
+    }
+    .history-entry:hover { background-color: rgba(255,255,255,0.04); }
+    .history-entry-week { color: var(--text-primary); font-weight: 600; }
+    .history-entry-count { white-space: nowrap; font-weight: 500; }
+    .history-entry-count .hit { color: var(--success); font-weight: 700; }
+    .no-history-msg { font-size: 0.85rem; color: var(--text-secondary); font-style: italic; }
+
+    /* ============================================================
+       CUSTOM PRESET FORM (polished)
+    ============================================================ */
+    #preset-form-panel {
+      background: linear-gradient(145deg, var(--bg-card), #1d1d1d);
+      border: 1px solid var(--accent); border-radius: var(--radius); padding: 1.5rem;
+      box-shadow: 0 4px 24px rgba(255,107,0,0.1); margin-top: 1.5rem; display: none;
+    }
+    #preset-form-panel.visible { display: block; animation: fadeInUp 0.3s ease; }
+    .preset-form-title { font-size: 1.05rem; font-weight: 800; color: var(--accent); margin-bottom: 1rem; }
+    .form-group { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.85rem; }
+    .form-label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .form-input { width: 100%; padding: 0.55rem 0.85rem; font-size: 0.9rem; border-radius: var(--radius-sm); }
+    .exercise-row-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 0.85rem; }
+    .exercise-row { display: grid; grid-template-columns: 2fr 1fr 1fr 0.8fr auto; gap: 0.5rem; align-items: center; }
+    @media (max-width: 767px) {
+      .exercise-row { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+      .exercise-row .ex-name-input { grid-column: 1 / -1; }
+    }
+    .exercise-row input, .exercise-row select { font-size: 0.82rem; padding: 0.4rem 0.6rem; border-radius: var(--radius-sm); }
+    .btn-remove-row {
+      background-color: transparent; color: var(--danger); border: 1px solid var(--danger);
+      border-radius: 50%; width: 26px; height: 26px; padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700; line-height: 1;
+    }
+    .btn-remove-row:hover { background-color: var(--danger); color: #fff; }
+    .btn-add-exercise {
+      background-color: var(--bg-secondary); color: var(--text-secondary);
+      border: 1px dashed var(--border); border-radius: var(--radius-sm);
+      padding: 0.55rem 1rem; font-size: 0.82rem; font-weight: 600;
+      width: 100%; margin-bottom: 0.85rem;
+    }
+    .btn-add-exercise:hover { border-color: var(--accent); color: var(--accent); background-color: rgba(255,107,0,0.05); }
+    .form-error { font-size: 0.82rem; color: var(--danger); font-weight: 600; min-height: 1.3rem; }
+    .form-actions { display: flex; gap: 0.7rem; flex-wrap: wrap; }
+    .btn-save-preset {
+      background: linear-gradient(135deg, var(--accent), #e05500);
+      color: var(--text-primary);
+      border-radius: 22px; padding: 0.55rem 1.25rem; font-size: 0.88rem; font-weight: 700;
+      box-shadow: 0 2px 10px rgba(255,107,0,0.3);
+    }
+    .btn-save-preset:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,107,0,0.4); }
+    .btn-cancel-preset {
+      background-color: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border); border-radius: 22px; padding: 0.55rem 1.25rem; font-size: 0.88rem; font-weight: 600;
+    }
+    .btn-cancel-preset:hover { border-color: var(--text-primary); color: var(--text-primary); }
+
+    /* ============================================================
+       MODAL (polished)
+    ============================================================ */
+    #modal-overlay {
+      position: fixed; inset: 0; background-color: rgba(0,0,0,0.8);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1000; padding: 1.25rem; opacity: 0; pointer-events: none;
+      transition: opacity 0.3s ease;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+    }
+    #modal-overlay.open { opacity: 1; pointer-events: auto; }
+    .modal-box {
+      background: linear-gradient(145deg, var(--bg-card), #1d1d1d);
+      border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+      width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto;
+      display: flex; flex-direction: column;
+      animation: fadeInUp 0.3s ease;
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(51,51,51,0.6); gap: 1rem;
+    }
+    .modal-title { font-size: 1.05rem; font-weight: 800; color: var(--text-primary); }
+    .btn-close-modal {
+      background-color: rgba(255,255,255,0.05); color: var(--text-secondary);
+      font-size: 1.2rem; line-height: 1; padding: 0.4rem 0.6rem; border-radius: 50%;
+      width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    }
+    .btn-close-modal:hover { color: var(--text-primary); background-color: rgba(255,255,255,0.1); }
+    .modal-body { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+    .modal-exercise-name { font-size: 0.95rem; color: var(--text-secondary); }
+    .btn-open-video {
+      background: linear-gradient(135deg, var(--accent), #e05500);
+      color: var(--text-primary);
+      border-radius: 22px; padding: 0.65rem 1.5rem; font-size: 0.92rem; font-weight: 700;
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 0.5rem;
+      box-shadow: 0 2px 10px rgba(255,107,0,0.3);
+    }
+    .btn-open-video:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,107,0,0.4); text-decoration: none; }
+
+    /* ============================================================
+       FOOTER (subtle)
+    ============================================================ */
+    .app-footer {
+      border-top: 1px solid rgba(51,51,51,0.5); padding: 1.25rem;
+      text-align: center; font-size: 0.75rem; color: rgba(170,170,170,0.6); margin-top: 3rem;
+      letter-spacing: 0.02em;
+    }
+
+    /* ============================================================
+       UTILITY & SCROLLBAR
+    ============================================================ */
+    .text-secondary { color: var(--text-secondary); }
+    .text-accent { color: var(--accent); }
+    .text-success { color: var(--success); }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background-color: rgba(51,51,51,0.8); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background-color: var(--accent); }
+
+    /* ============================================================
+       SELECTION
+    ============================================================ */
+    ::selection { background-color: rgba(255,107,0,0.25); color: var(--text-primary); }
+  </style>
+</head>
+<body>
+
+  <!-- localStorage warning banner -->
+  <div id="banner-warning" class="banner-warning" role="alert" aria-live="polite"></div>
+  <!-- Firebase sync info banner -->
+  <div id="banner-info" class="banner-info" role="status" aria-live="polite"></div>
+
+  <!-- ============================================================ HEADER ============================================================ -->
+  <header class="app-header" role="banner">
+    <div class="header-inner">
+      <h1 class="app-title" data-i18n="appTitle"><img src="logo.svg" alt="logo" width="26" height="26" style="vertical-align:middle;margin-right:0.45rem;" />Workout Tracker</h1>
+      <div class="header-controls">
+        <!-- Preset selector (populated by JS) -->
+        <div id="preset-selector" aria-label="Pilih preset aktivitas"></div>
+        <!-- Auth section (populated by JS) -->
+        <div id="auth-section" style="display:flex;align-items:center;gap:0.5rem;"></div>
+        <!-- Language toggle -->
+        <button id="btn-lang" class="btn-lang" data-action="lang-toggle"
+          aria-label="Toggle language / Ganti bahasa" title="Toggle language">
+          ID / EN
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================ MAIN ============================================================ -->
+  <main class="app-main" role="main">
+    <div class="app-container">
+      <nav id="tab-nav" role="tablist" aria-label="Kategori gerakan"></nav>
+      <section id="exercise-grid" role="tabpanel" aria-label="Daftar gerakan"></section>
+      <section id="preset-form-panel" aria-label="Form preset kustom"></section>
+      <div class="panels-row">
+        <section id="weekly-tracker" aria-label="Pelacak target mingguan"></section>
+        <section id="history-panel" aria-label="Riwayat mingguan"></section>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============================================================ MODAL (fallback) ============================================================ -->
+  <div id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-hidden="true">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modal-title" data-i18n="modalTitle">Panduan Gerakan</h2>
+        <button id="btn-close-modal" class="btn-close-modal" data-action="close-modal" aria-label="Tutup modal">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-exercise-name" id="modal-exercise-name"></p>
+        <a id="btn-open-video" class="btn-open-video" href="#" target="_blank" rel="noopener noreferrer">
+          &#9654; Lihat Gerakan di YouTube
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <footer class="app-footer" role="contentinfo">
+    <span>Multi-Sport Workout Tracker &mdash; Firebase + LocalStorage SPA</span>
+  </footer>
+
+  <script>
+  // ================================================================
+  // FIREBASE INITIALIZATION
+  // ================================================================
+  // Config di-load dari file terpisah: firebase-config.js
+  // File itu berisi variabel global FIREBASE_CONFIG.
+  // Jika file tidak ditemukan atau config belum diisi, Firebase dinonaktifkan.
+  // ================================================================
+
+  let _firebaseApp = null;
+  let _auth        = null;
+  let _db          = null;
+  let _firestoreUnsubscribe = null;
+
+  function initFirebase() {
+    try {
+      if (typeof FIREBASE_CONFIG === 'undefined') {
+        console.warn('[Firebase] firebase-config.js tidak ditemukan. Firebase dinonaktifkan.');
+        return false;
+      }
+      if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.startsWith('GANTI')) {
+        console.warn('[Firebase] Config belum diisi. Firebase dinonaktifkan.');
+        return false;
+      }
+      _firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+      _auth        = firebase.auth();
+      _db          = firebase.firestore();
+      return true;
+    } catch (e) {
+      console.error('[Firebase] Gagal inisialisasi:', e);
+      return false;
+    }
+  }
+
+  const FIREBASE_ENABLED = initFirebase();
+
+  // ================================================================
+  // MODULE 1: BUILT-IN PRESETS DATA
+  // ================================================================
+  // HOW TO ADD A NEW PRESET:
+  // 1. Tambahkan objek baru ke array BUILT_IN_PRESETS di bawah.
+  // 2. Berikan id unik lowercase (contoh: "yoga", "hiit").
+  // 3. Set isBuiltIn: true agar tidak bisa dihapus via UI.
+  // 4. Isi exercises dengan skema:
+  //    { id, name, category: "warmup"|"strength", type: "reps"|"time",
+  //      value: <number>, unit: "reps"|"per side"|"seconds",
+  //      gifUrl: "https://..." }  ← opsional, URL gambar GIF animasi gerakan
+  // 5. GIF otomatis loop di kartu tanpa perlu klik play.
+  //    Jika gifUrl tidak diisi, akan tampil pesan "animasi belum tersedia".
+  //
+  // SUMBER GIF: ExerciseDB Open Source (AGPL-3.0)
+  // CDN: https://bootstrapping-lab.github.io/exercisedb-api/media/exercisedb_v1/gif/{id}.gif
+  // Alternatif: upload sendiri ke folder /gifs/ di server
+  // ================================================================
+  const BUILT_IN_PRESETS = [
+    {
+      id: "running", name: "Running (Lari)", isBuiltIn: true,
+      exercises: [
+        { id:"warmup-fls",  name:"Forward Leg Swings",       category:"warmup",   type:"reps", value:10, unit:"reps" },
+        { id:"warmup-lls",  name:"Lateral Leg Swings",       category:"warmup",   type:"reps", value:10, unit:"reps" },
+        { id:"warmup-hk",   name:"High Knees",               category:"warmup",   type:"time", value:30, unit:"seconds" },
+        { id:"warmup-bk",   name:"Butt Kicks",               category:"warmup",   type:"time", value:30, unit:"seconds" },
+        { id:"warmup-wl",   name:"Walking Lunges",           category:"warmup",   type:"reps", value:10, unit:"reps" },
+        { id:"str-bws",     name:"Bodyweight Squats",        category:"strength", type:"reps", value:15, unit:"reps" },
+        { id:"str-slgb",    name:"Single-Leg Glute Bridges", category:"strength", type:"reps", value:12, unit:"per side" },
+        { id:"str-cr",      name:"Calf Raises",              category:"strength", type:"reps", value:20, unit:"reps" },
+        { id:"str-pl",      name:"Plank",                    category:"strength", type:"time", value:60, unit:"seconds" },
+        { id:"str-spl",     name:"Side Plank",               category:"strength", type:"time", value:30, unit:"seconds" },
+      ]
+    },
+    {
+      id: "cycling", name: "Cycling / General Home", isBuiltIn: true,
+      exercises: [
+        { id:"warmup-ac",   name:"Arm Circles",            category:"warmup",   type:"reps", value:10, unit:"reps" },
+        { id:"warmup-tt",   name:"Torso Twists",           category:"warmup",   type:"reps", value:15, unit:"reps" },
+        { id:"warmup-jj",   name:"Jumping Jacks",          category:"warmup",   type:"time", value:45, unit:"seconds" },
+        { id:"warmup-dqs",  name:"Dynamic Quad Stretches", category:"warmup",   type:"reps", value:10, unit:"reps" },
+        { id:"str-pu",      name:"Push-Ups",               category:"strength", type:"reps", value:12, unit:"reps" },
+        { id:"str-gb",      name:"Glute Bridges",          category:"strength", type:"reps", value:15, unit:"reps" },
+        { id:"str-mc",      name:"Mountain Climbers",      category:"strength", type:"time", value:45, unit:"seconds" },
+        { id:"str-bd",      name:"Bird-Dog",               category:"strength", type:"reps", value:12, unit:"per side" },
+        { id:"str-ws",      name:"Wall Sit",               category:"strength", type:"time", value:45, unit:"seconds" },
+      ]
+    }
+  ];
+
+  // ================================================================
+  // MODULE 2: I18N
+  // ================================================================
+  const TRANSLATIONS = {
+    id: {
+      appTitle:"Workout Tracker", tabWarmup:"Pemanasan", tabStrength:"Kekuatan",
+      btnWatchExercise:"Lihat Gerakan", btnHideVideo:"Sembunyikan",
+      btnCompleteSession:"Selesai Sesi", btnNewWeek:"Mulai Minggu Baru",
+      btnAddPreset:"Tambah Preset", labelWeeklyTarget:"Target sesi per minggu",
+      labelProgress:"Selesai {0} dari {1} sesi minggu ini",
+      labelGoalAchieved:"🎉 Target minggu ini tercapai!",
+      labelReps:"repetisi", labelPerSide:"per sisi", labelSeconds:"detik",
+      btnStart:"Mulai", btnPause:"Jeda", btnReset:"Reset",
+      labelTimerDone:"Selesai!", modalTitle:"Panduan Gerakan", btnClose:"Tutup",
+      labelHistory:"Riwayat Mingguan", labelNoHistory:"Belum ada riwayat.",
+      labelWeekOf:"Minggu {0}", labelSessionOf:"{0} dari {1} sesi",
+      errPresetNameEmpty:"Nama preset tidak boleh kosong.",
+      errPresetNoExercises:"Preset harus memiliki minimal satu gerakan.",
+      errLocalStorage:"Penyimpanan lokal tidak tersedia. Data tidak akan disimpan.",
+      placeholderPresetName:"Nama preset baru...",
+      labelExerciseName:"Nama Gerakan", labelCategory:"Kategori",
+      labelType:"Jenis", labelValue:"Target",
+      optWarmup:"Pemanasan", optStrength:"Kekuatan",
+      optReps:"Repetisi", optTime:"Waktu (detik)",
+      btnAddExercise:"Tambah Gerakan", btnSavePreset:"Simpan Preset",
+      btnDeletePreset:"Hapus Preset",
+      confirmDeletePreset:"Yakin ingin menghapus preset ini?",
+      panelWeeklyTarget:"Target Mingguan",
+      btnSignIn:"Masuk dengan Google", btnSignOut:"Keluar",
+      labelSignedInAs:"Masuk sebagai", labelSyncing:"Menyinkronkan...",
+      labelSynced:"Tersimpan di cloud ☁", labelOfflineMode:"Mode offline (localStorage)",
+      labelFirebaseNotConfigured:"Firebase belum dikonfigurasi. Data disimpan lokal.",
+    },
+    en: {
+      appTitle:"Workout Tracker", tabWarmup:"Warm-Up", tabStrength:"Strength",
+      btnWatchExercise:"Watch Exercise", btnHideVideo:"Hide",
+      btnCompleteSession:"Complete Session", btnNewWeek:"New Week",
+      btnAddPreset:"Add Preset", labelWeeklyTarget:"Sessions per week target",
+      labelProgress:"Completed {0} of {1} sessions this week",
+      labelGoalAchieved:"🎉 Weekly goal achieved!",
+      labelReps:"reps", labelPerSide:"per side", labelSeconds:"seconds",
+      btnStart:"Start", btnPause:"Pause", btnReset:"Reset",
+      labelTimerDone:"Done!", modalTitle:"Exercise Guide", btnClose:"Close",
+      labelHistory:"Weekly History", labelNoHistory:"No history yet.",
+      labelWeekOf:"Week of {0}", labelSessionOf:"{0} of {1} sessions",
+      errPresetNameEmpty:"Preset name cannot be empty.",
+      errPresetNoExercises:"Preset must have at least one exercise.",
+      errLocalStorage:"Local storage unavailable. Data will not be saved.",
+      placeholderPresetName:"New preset name...",
+      labelExerciseName:"Exercise Name", labelCategory:"Category",
+      labelType:"Type", labelValue:"Target",
+      optWarmup:"Warm-Up", optStrength:"Strength",
+      optReps:"Reps", optTime:"Time (seconds)",
+      btnAddExercise:"Add Exercise", btnSavePreset:"Save Preset",
+      btnDeletePreset:"Delete Preset",
+      confirmDeletePreset:"Are you sure you want to delete this preset?",
+      panelWeeklyTarget:"Weekly Target",
+      btnSignIn:"Sign in with Google", btnSignOut:"Sign Out",
+      labelSignedInAs:"Signed in as", labelSyncing:"Syncing...",
+      labelSynced:"Saved to cloud ☁", labelOfflineMode:"Offline mode (localStorage)",
+      labelFirebaseNotConfigured:"Firebase not configured. Data saved locally.",
+    }
+  };
+
+  function t(key, ...params) {
+    const lang = (typeof AppState !== 'undefined') ? AppState.language : 'id';
+    let str = (TRANSLATIONS[lang]&&TRANSLATIONS[lang][key])
+           || (TRANSLATIONS['id']&&TRANSLATIONS['id'][key]) || key;
+    params.forEach((p,i) => { str = str.replace(`{${i}}`, String(p)); });
+    return str;
+  }
+
+  // ================================================================
+  // MODULE 3: APP STATE
+  // ================================================================
+  const AppState = {
+    activePresetId:   "running",
+    activeTab:        "warmup",
+    checklist:        {},
+    weeklyTarget:     3,
+    sessionsCompleted:0,
+    history:          [],
+    customPresets:    [],
+    language:         "id",
+    activeTimers:     {},
+    localStorageAvailable: true,
+    // Firebase / auth
+    currentUser:      null,
+    isSyncing:        false,
+  };
+
+  // ================================================================
+  // MODULE 4: LOCAL STORAGE
+  // ================================================================
+  const Storage = {
+    KEYS: {
+      ACTIVE_PRESET:"wt_activePreset", ACTIVE_TAB:"wt_activeTab",
+      CHECKLIST:"wt_checklist", WEEKLY_TARGET:"wt_weeklyTarget",
+      SESSIONS_COMPLETED:"wt_sessionsCompleted", HISTORY:"wt_history",
+      CUSTOM_PRESETS:"wt_customPresets", LANGUAGE:"wt_language",
+    },
+    isAvailable() {
+      try { const k="__wt__"; localStorage.setItem(k,"1"); localStorage.removeItem(k); return true; }
+      catch(e) { return false; }
+    },
+    save(key, value) {
+      if (!AppState.localStorageAvailable) return;
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch(e) { console.warn('[LS] save fail',key,e); }
+    },
+    load(key, def) {
+      if (!AppState.localStorageAvailable) return def;
+      try { const r=localStorage.getItem(key); return r===null?def:JSON.parse(r); }
+      catch(e) { return def; }
+    },
+    saveAll(state) {
+      this.save(this.KEYS.ACTIVE_PRESET,      state.activePresetId);
+      this.save(this.KEYS.ACTIVE_TAB,         state.activeTab);
+      this.save(this.KEYS.CHECKLIST,          state.checklist);
+      this.save(this.KEYS.WEEKLY_TARGET,      state.weeklyTarget);
+      this.save(this.KEYS.SESSIONS_COMPLETED, state.sessionsCompleted);
+      this.save(this.KEYS.HISTORY,            state.history);
+      this.save(this.KEYS.CUSTOM_PRESETS,     state.customPresets);
+      this.save(this.KEYS.LANGUAGE,           state.language);
+    },
+    loadAll() {
+      return {
+        activePresetId:    this.load(this.KEYS.ACTIVE_PRESET,      AppState.activePresetId),
+        activeTab:         this.load(this.KEYS.ACTIVE_TAB,          AppState.activeTab),
+        checklist:         this.load(this.KEYS.CHECKLIST,           AppState.checklist),
+        weeklyTarget:      this.load(this.KEYS.WEEKLY_TARGET,       AppState.weeklyTarget),
+        sessionsCompleted: this.load(this.KEYS.SESSIONS_COMPLETED,  AppState.sessionsCompleted),
+        history:           this.load(this.KEYS.HISTORY,             AppState.history),
+        customPresets:     this.load(this.KEYS.CUSTOM_PRESETS,      AppState.customPresets),
+        language:          this.load(this.KEYS.LANGUAGE,            AppState.language),
+      };
+    },
+  };
+
+  function initStateFromStorage() {
+    AppState.localStorageAvailable = Storage.isAvailable();
+    if (!AppState.localStorageAvailable) return;
+    const s = Storage.loadAll();
+    if (s.activePresetId) AppState.activePresetId = s.activePresetId;
+    if (s.activeTab==="warmup"||s.activeTab==="strength") AppState.activeTab = s.activeTab;
+    if (s.checklist && typeof s.checklist==="object") AppState.checklist = s.checklist;
+    if (typeof s.weeklyTarget==="number" && s.weeklyTarget>=1) AppState.weeklyTarget = s.weeklyTarget;
+    if (typeof s.sessionsCompleted==="number" && s.sessionsCompleted>=0) AppState.sessionsCompleted = s.sessionsCompleted;
+    if (Array.isArray(s.history)) AppState.history = s.history;
+    if (Array.isArray(s.customPresets)) AppState.customPresets = s.customPresets;
+    if (s.language==="id"||s.language==="en") AppState.language = s.language;
+  }
+
+  // ================================================================
+  // MODULE 5: FIRESTORE SYNC
+  // ================================================================
+  // Data structure in Firestore:
+  //   /users/{uid}/data/main  → { activePresetId, activeTab, checklist,
+  //                               weeklyTarget, sessionsCompleted,
+  //                               history, customPresets, language }
+  // ================================================================
+
+  const CloudSync = {
+    /** Resolve Firestore doc reference for the current user */
+    _ref() {
+      if (!_db || !AppState.currentUser) return null;
+      return _db.collection('users').doc(AppState.currentUser.uid).collection('data').doc('main');
+    },
+
+    /**
+     * Saves all syncable AppState fields to Firestore.
+     * Falls back silently if not logged in or Firebase unavailable.
+     */
+    async save() {
+      const ref = this._ref();
+      if (!ref) return;
+      AppState.isSyncing = true;
+      Renderer.renderAuthSection();
+      try {
+        await ref.set({
+          activePresetId:    AppState.activePresetId,
+          activeTab:         AppState.activeTab,
+          checklist:         AppState.checklist,
+          weeklyTarget:      AppState.weeklyTarget,
+          sessionsCompleted: AppState.sessionsCompleted,
+          history:           AppState.history,
+          customPresets:     AppState.customPresets,
+          language:          AppState.language,
+          updatedAt:         firebase.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      } catch(e) {
+        console.warn('[Firestore] save failed:', e);
+      } finally {
+        AppState.isSyncing = false;
+        Renderer.renderAuthSection();
+      }
+    },
+
+    /**
+     * Loads data from Firestore and merges into AppState.
+     * Called once on login.
+     */
+    async load() {
+      const ref = this._ref();
+      if (!ref) return;
+      try {
+        const snap = await ref.get();
+        if (!snap.exists) return; // first time user — no cloud data yet
+        const d = snap.data();
+        if (d.activePresetId) AppState.activePresetId = d.activePresetId;
+        if (d.activeTab==="warmup"||d.activeTab==="strength") AppState.activeTab = d.activeTab;
+        if (d.checklist && typeof d.checklist==="object") AppState.checklist = d.checklist;
+        if (typeof d.weeklyTarget==="number" && d.weeklyTarget>=1) AppState.weeklyTarget = d.weeklyTarget;
+        if (typeof d.sessionsCompleted==="number") AppState.sessionsCompleted = d.sessionsCompleted;
+        if (Array.isArray(d.history)) AppState.history = d.history;
+        if (Array.isArray(d.customPresets)) AppState.customPresets = d.customPresets;
+        if (d.language==="id"||d.language==="en") AppState.language = d.language;
+      } catch(e) {
+        console.warn('[Firestore] load failed:', e);
+      }
+    },
+
+    /**
+     * Starts a real-time listener. Any change on another device
+     * is reflected immediately.
+     */
+    startListener() {
+      const ref = this._ref();
+      if (!ref) return;
+      if (_firestoreUnsubscribe) _firestoreUnsubscribe(); // clean up old listener
+      _firestoreUnsubscribe = ref.onSnapshot((snap) => {
+        if (!snap.exists || AppState.isSyncing) return;
+        const d = snap.data();
+        // Only update fields that changed; avoid overwriting in-progress timer
+        if (d.activePresetId) AppState.activePresetId = d.activePresetId;
+        if (typeof d.weeklyTarget==="number") AppState.weeklyTarget = d.weeklyTarget;
+        if (typeof d.sessionsCompleted==="number") AppState.sessionsCompleted = d.sessionsCompleted;
+        if (Array.isArray(d.history)) AppState.history = d.history;
+        if (Array.isArray(d.customPresets)) AppState.customPresets = d.customPresets;
+        if (d.language==="id"||d.language==="en") AppState.language = d.language;
+        if (d.checklist && typeof d.checklist==="object") AppState.checklist = d.checklist;
+        Renderer.renderAll();
+      }, (err) => {
+        console.warn('[Firestore] listener error:', err);
+      });
+    },
+
+    stopListener() {
+      if (_firestoreUnsubscribe) { _firestoreUnsubscribe(); _firestoreUnsubscribe = null; }
+    },
+  };
+
+  /**
+   * Persists state: to Firestore if logged in, otherwise to localStorage.
+   * Call this everywhere Storage.saveAll(AppState) was previously called.
+   */
+  function persistAll() {
+    if (AppState.currentUser && FIREBASE_ENABLED) {
+      CloudSync.save();   // async, non-blocking
+    } else {
+      Storage.saveAll(AppState);
+    }
+  }
+
+  /**
+   * Persists a single field to localStorage (used for lang, tab, etc.
+   * when we also want to batch-save to Firestore).
+   */
+  function persistField(key, value) {
+    Storage.save(key, value);
+    if (AppState.currentUser && FIREBASE_ENABLED) {
+      CloudSync.save();
+    }
+  }
+
+  // ================================================================
+  // MODULE 6: TIMER MANAGER
+  // ================================================================
+  const TimerManager = {
+    init(exerciseId, durationSeconds) {
+      if (!AppState.activeTimers[exerciseId]) {
+        AppState.activeTimers[exerciseId] = { remaining:durationSeconds, initial:durationSeconds, isRunning:false, intervalId:null };
+      }
+    },
+    start(exerciseId, onTick, onComplete) {
+      const timer = AppState.activeTimers[exerciseId];
+      if (!timer || timer.remaining<=0 || timer.intervalId!==null) return;
+      timer.isRunning = true;
+      timer.intervalId = setInterval(() => {
+        timer.remaining -= 1;
+        if (typeof onTick==='function') onTick(timer.remaining);
+        if (timer.remaining<=0) {
+          timer.remaining=0; timer.isRunning=false;
+          clearInterval(timer.intervalId); timer.intervalId=null;
+          if (typeof onComplete==='function') onComplete();
+        }
+      }, 1000);
+    },
+    pause(exerciseId) {
+      const timer = AppState.activeTimers[exerciseId];
+      if (!timer) return;
+      if (timer.intervalId!==null) { clearInterval(timer.intervalId); timer.intervalId=null; }
+      timer.isRunning = false;
+    },
+    reset(exerciseId) {
+      const timer = AppState.activeTimers[exerciseId];
+      if (!timer) return;
+      if (timer.intervalId!==null) { clearInterval(timer.intervalId); timer.intervalId=null; }
+      timer.remaining = timer.initial; timer.isRunning = false;
+    },
+    clearAll() {
+      Object.values(AppState.activeTimers).forEach(t => {
+        if (t&&t.intervalId!==null) { clearInterval(t.intervalId); t.intervalId=null; t.isRunning=false; }
+      });
+      AppState.activeTimers = {};
+    },
+    get(exerciseId) { return AppState.activeTimers[exerciseId] || null; },
+  };
+
+  // ================================================================
+  // MODULE 7: PRESET MANAGER
+  // ================================================================
+  const PresetManager = {
+    getAll()      { return [...BUILT_IN_PRESETS, ...AppState.customPresets]; },
+    getById(id)   { return this.getAll().find(p=>p.id===id); },
+    validate(name, exercises) {
+      if (!name||!name.trim()) return { valid:false, error:t('errPresetNameEmpty') };
+      if (!Array.isArray(exercises)||exercises.length===0) return { valid:false, error:t('errPresetNoExercises') };
+      return { valid:true, error:null };
+    },
+    generateId(name) {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+      return `${slug}-${Date.now().toString(36)}`;
+    },
+    add(name, exercises) {
+      const v = this.validate(name, exercises);
+      if (!v.valid) return { success:false, error:v.error, preset:null };
+      const preset = { id:this.generateId(name), name:name.trim(), isBuiltIn:false, exercises };
+      AppState.customPresets.push(preset);
+      persistAll();
+      return { success:true, error:null, preset };
+    },
+    delete(id) {
+      const p = this.getById(id);
+      if (!p) return { success:false, error:'Preset not found.' };
+      if (p.isBuiltIn) return { success:false, error:'Built-in presets cannot be deleted.' };
+      AppState.customPresets = AppState.customPresets.filter(x=>x.id!==id);
+      if (AppState.activePresetId===id) AppState.activePresetId = BUILT_IN_PRESETS[0].id;
+      persistAll();
+      return { success:true, error:null };
+    },
+  };
+
+  // ================================================================
+  // MODULE 8: NEW WEEK ACTION
+  // ================================================================
+  function newWeek() {
+    const today = new Date().toISOString().split('T')[0];
+    AppState.history.unshift({ weekStart:today, target:AppState.weeklyTarget, completed:AppState.sessionsCompleted });
+    AppState.history = AppState.history.slice(0, 52);
+    AppState.sessionsCompleted = 0;
+    AppState.checklist = {};
+    persistAll();
+    Renderer.renderAll();
+  }
+
+  // ================================================================
+  // MODULE 9: YOUTUBE EMBED HELPERS
+  // ================================================================
+  /**
+   * Converts an exercise name to a YouTube embed search URL.
+   * YouTube may block some searches via embed; the card shows a fallback link.
+   * @param {string} exerciseName
+   * @returns {string}
+   */
+  // ================================================================
+  // MODULE 9: ANIMATION HELPERS
+  // ================================================================
+  // GIF animasi langsung di-load dari URL yang ada di field gifUrl per gerakan.
+  // Tidak perlu YouTube atau embed apapun — cukup <img> tag.
+  // ================================================================
+
+  function buildYouTubeSearchUrl(exerciseName) {
+    // Kept as fallback for modal link if needed
+    const q = encodeURIComponent(exerciseName + ' exercise tutorial workout');
+    return `https://www.youtube.com/results?search_query=${q}`;
+  }
+
+  function openVideoModal(exerciseName) {
+    const overlay = document.getElementById('modal-overlay');
+    const nameEl  = document.getElementById('modal-exercise-name');
+    const linkEl  = document.getElementById('btn-open-video');
+    if (!overlay) return;
+    if (nameEl) nameEl.textContent = exerciseName;
+    if (linkEl) { linkEl.href = buildYouTubeSearchUrl(exerciseName); linkEl.textContent = t('btnWatchExercise'); }
+    overlay.classList.add('open'); overlay.setAttribute('aria-hidden','false');
+    document.getElementById('btn-close-modal')?.focus();
+  }
+
+  function closeVideoModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('open'); overlay.setAttribute('aria-hidden','true');
+    const linkEl = document.getElementById('btn-open-video');
+    if (linkEl) linkEl.href = '#';
+  }
+
+  // ================================================================
+  // MODULE 10: RENDERER
+  // ================================================================
+  const Renderer = {
+
+    // ---- Exercise Cards ----
+    renderExerciseCard(exercise) {
+      const isDone = !!AppState.checklist[exercise.id];
+
+      // Video section — simpel: langsung buka YouTube search di tab baru
+      let videoHtml = '';
+
+      // Target section (timer or reps)
+      let targetHtml = '';
+      if (exercise.type==='time') {
+        TimerManager.init(exercise.id, exercise.value);
+        const timer   = TimerManager.get(exercise.id);
+        const rem     = timer ? timer.remaining : exercise.value;
+        const running = timer ? timer.isRunning : false;
+        const done    = rem<=0;
+        const display = done
+          ? `<span class="timer-display done">${t('labelTimerDone')}</span>`
+          : `<span class="timer-display" id="timer-display-${exercise.id}">${rem}</span><span class="timer-unit text-secondary"> ${t('labelSeconds')}</span>`;
+        const startBtn = running
+          ? `<button class="btn-timer btn-pause" data-action="pause" data-exercise-id="${exercise.id}">${t('btnPause')}</button>`
+          : `<button class="btn-timer btn-start" data-action="start" data-exercise-id="${exercise.id}">${t('btnStart')}</button>`;
+        targetHtml = `<div class="timer-control"><div>${display}</div><div class="timer-buttons">${startBtn}<button class="btn-timer btn-reset" data-action="reset" data-exercise-id="${exercise.id}">${t('btnReset')}</button></div></div>`;
+      } else {
+        const unit = exercise.unit==='per side' ? t('labelPerSide') : t('labelReps');
+        targetHtml = `<div><div class="rep-display">${exercise.value}</div><div class="rep-unit">${unit}</div></div>`;
+      }
+
+      return `
+        <div class="exercise-card${isDone?' done':''}" data-exercise-id="${exercise.id}">
+          <div class="exercise-card-header">
+            <span class="exercise-name">${exercise.name}</span>
+            <input type="checkbox" class="exercise-checkbox"
+              data-action="toggle-checklist" data-exercise-id="${exercise.id}"
+              ${isDone?'checked':''} aria-label="Tandai ${exercise.name} selesai" />
+          </div>
+          ${videoHtml}
+          ${targetHtml}
+          <button class="btn-watch"
+            data-action="watch-exercise"
+            data-exercise-id="${exercise.id}"
+            data-exercise-name="${exercise.name}"
+          >${t('btnWatchExercise')}</button>
+        </div>`;
+    },
+
+    renderExerciseCards() {
+      const preset = PresetManager.getById(AppState.activePresetId);
+      if (!preset) return;
+      const exercises = preset.exercises.filter(e=>e.category===AppState.activeTab);
+      const grid = document.getElementById('exercise-grid');
+      if (!grid) return;
+      if (exercises.length===0) { grid.innerHTML='<p class="text-secondary" style="padding:1rem 0;">(Tidak ada gerakan)</p>'; return; }
+      grid.innerHTML = exercises.map(ex=>this.renderExerciseCard(ex)).join('');
+    },
+
+    // ---- Tabs ----
+    renderTabs() {
+      const nav = document.getElementById('tab-nav');
+      if (!nav) return;
+      nav.innerHTML = [
+        {id:'warmup',labelKey:'tabWarmup'},
+        {id:'strength',labelKey:'tabStrength'},
+      ].map(tab=>`
+        <button class="tab-btn${AppState.activeTab===tab.id?' active':''}"
+          role="tab" aria-selected="${AppState.activeTab===tab.id}"
+          data-action="switch-tab" data-tab="${tab.id}"
+        >${t(tab.labelKey)}</button>
+      `).join('');
+    },
+
+    // ---- Preset Selector ----
+    renderPresetSelector() {
+      const container = document.getElementById('preset-selector');
+      if (!container) return;
+      const allPresets = PresetManager.getAll();
+      const active = PresetManager.getById(AppState.activePresetId);
+      const isCustom = active && !active.isBuiltIn;
+      const opts = allPresets.map(p=>`<option value="${p.id}"${p.id===AppState.activePresetId?' selected':''}>${p.name}</option>`).join('');
+      const delBtn = isCustom ? `<button class="btn-delete-preset" data-action="delete-preset" data-preset-id="${AppState.activePresetId}">${t('btnDeletePreset')}</button>` : '';
+      container.innerHTML = `
+        <select class="preset-select" data-action="change-preset">${opts}</select>
+        <button class="btn-add-preset" data-action="add-preset">${t('btnAddPreset')}</button>
+        ${delBtn}`;
+    },
+
+    // ---- Auth Section ----
+    renderAuthSection() {
+      const section = document.getElementById('auth-section');
+      if (!section) return;
+      if (!FIREBASE_ENABLED) {
+        section.innerHTML = `<span style="font-size:0.72rem;color:var(--text-secondary)">☁ offline</span>`;
+        return;
+      }
+      if (AppState.currentUser) {
+        const u = AppState.currentUser;
+        const avatarSrc = u.photoURL || '';
+        const syncLabel = AppState.isSyncing
+          ? `<span class="sync-indicator">⏳ ${t('labelSyncing')}</span>`
+          : `<span style="font-size:0.72rem;color:var(--accent-alt)">☁ ${t('labelSynced')}</span>`;
+        section.innerHTML = `
+          <div class="user-info">
+            ${avatarSrc ? `<img src="${avatarSrc}" class="user-avatar" alt="avatar" referrerpolicy="no-referrer"/>` : ''}
+            <span>${u.displayName||u.email||''}</span>
+            ${syncLabel}
+          </div>
+          <button class="btn-auth sign-out" data-action="sign-out">${t('btnSignOut')}</button>`;
+      } else {
+        section.innerHTML = `
+          <button class="btn-auth sign-in" data-action="sign-in">
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="G" />
+            ${t('btnSignIn')}
+          </button>`;
+      }
+    },
+
+    // ---- Weekly Tracker ----
+    renderWeeklyTracker() {
+      const tracker = document.getElementById('weekly-tracker');
+      if (!tracker) return;
+      const pct = AppState.weeklyTarget>0
+        ? Math.min(100, Math.round((AppState.sessionsCompleted/AppState.weeklyTarget)*100)) : 0;
+      const achieved = AppState.sessionsCompleted>=AppState.weeklyTarget;
+      const syncBadge = (AppState.currentUser && FIREBASE_ENABLED)
+        ? `<span class="sync-badge">☁ cloud sync</span>` : '';
+      tracker.innerHTML = `
+        <div class="panel-title">${t('panelWeeklyTarget')} ${syncBadge}</div>
+        <div class="target-row">
+          <label class="target-label" for="weekly-target-input">${t('labelWeeklyTarget')}</label>
+          <input type="number" id="weekly-target-input" class="target-input"
+            min="1" max="14" value="${AppState.weeklyTarget}"
+            data-action="change-target" aria-label="${t('labelWeeklyTarget')}" />
+        </div>
+        <div class="progress-label">${t('labelProgress', AppState.sessionsCompleted, AppState.weeklyTarget)}</div>
+        <div class="progress-bar-wrap" role="progressbar"
+          aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+          <div class="progress-bar-fill" style="width:${pct}%;"></div>
+        </div>
+        <div class="achievement-msg${achieved?' visible':''}">${t('labelGoalAchieved')}</div>
+        <div class="session-buttons">
+          <button class="btn-complete-session" data-action="complete-session">${t('btnCompleteSession')}</button>
+          <button class="btn-new-week" data-action="new-week">${t('btnNewWeek')}</button>
+        </div>`;
+    },
+
+    // ---- History ----
+    renderHistory() {
+      const panel = document.getElementById('history-panel');
+      if (!panel) return;
+      let listHtml = AppState.history.length===0
+        ? `<p class="no-history-msg">${t('labelNoHistory')}</p>`
+        : `<div class="history-list">` + AppState.history.map(entry=>{
+            const hit = entry.completed>=entry.target ? ' hit' : '';
+            return `<div class="history-entry">
+              <span class="history-entry-week">${t('labelWeekOf', entry.weekStart)}</span>
+              <span class="history-entry-count"><span class="${hit?'hit':''}">${entry.completed}</span> / ${entry.target}</span>
+            </div>`;
+          }).join('') + `</div>`;
+      panel.innerHTML = `<div class="panel-title">${t('labelHistory')}</div>${listHtml}`;
+    },
+
+    // ---- Language ----
+    applyLanguage() {
+      document.documentElement.lang = AppState.language;
+      const btn = document.getElementById('btn-lang');
+      if (btn) { btn.textContent = AppState.language==='id'?'EN':'ID'; }
+      document.querySelectorAll('[data-i18n]').forEach(el=>{
+        const k = el.getAttribute('data-i18n');
+        if (k) el.textContent = t(k);
+      });
+    },
+
+    // ---- Preset Form ----
+    renderPresetForm(show=true) {
+      const panel = document.getElementById('preset-form-panel');
+      if (!panel) return;
+      if (!show) { panel.classList.remove('visible'); panel.innerHTML=''; return; }
+      panel.innerHTML = `
+        <div class="preset-form-title">${t('btnAddPreset')}</div>
+        <div class="form-group">
+          <label class="form-label" for="new-preset-name">${t('placeholderPresetName')}</label>
+          <input type="text" id="new-preset-name" class="form-input"
+            placeholder="${t('placeholderPresetName')}" />
+        </div>
+        <div class="exercise-row-list" id="exercise-row-list"></div>
+        <button class="btn-add-exercise" data-action="add-exercise-row">${t('btnAddExercise')}</button>
+        <div class="form-error" id="preset-form-error" role="alert"></div>
+        <div class="form-actions">
+          <button class="btn-save-preset" data-action="save-preset">${t('btnSavePreset')}</button>
+          <button class="btn-cancel-preset" data-action="cancel-preset">${t('btnClose')}</button>
+        </div>`;
+      panel.classList.add('visible');
+      this.addExerciseRow();
+    },
+
+    addExerciseRow() {
+      const list = document.getElementById('exercise-row-list');
+      if (!list) return;
+      const idx = list.children.length;
+      const row = document.createElement('div');
+      row.className = 'exercise-row';
+      row.innerHTML = `
+        <input type="text" class="ex-name-input" placeholder="${t('labelExerciseName')}" />
+        <select class="ex-category-select">
+          <option value="warmup">${t('optWarmup')}</option>
+          <option value="strength">${t('optStrength')}</option>
+        </select>
+        <select class="ex-type-select">
+          <option value="reps">${t('optReps')}</option>
+          <option value="time">${t('optTime')}</option>
+        </select>
+        <input type="number" class="ex-value-input" min="1" value="10" />
+        <button class="btn-remove-row" data-action="remove-exercise-row" aria-label="Hapus">✕</button>`;
+      list.appendChild(row);
+    },
+
+    // ---- Full render ----
+    renderAll() {
+      this.renderAuthSection();
+      this.renderPresetSelector();
+      this.renderTabs();
+      this.renderExerciseCards();
+      this.renderWeeklyTracker();
+      this.renderHistory();
+      this.applyLanguage();
+    },
+  };
+
+  // ================================================================
+  // MODULE 11: EVENT CONTROLLER
+  // ================================================================
+  const EventController = {
+    init() {
+      // Exercise grid delegation
+      const grid = document.getElementById('exercise-grid');
+      if (grid) {
+        grid.addEventListener('click',  e=>this.handleGridClick(e));
+        grid.addEventListener('change', e=>this.handleGridChange(e));
+      }
+      // Global click/change
+      document.addEventListener('click',  e=>this.handleDocClick(e));
+      document.addEventListener('change', e=>this.handleDocChange(e));
+      // Modal close on overlay
+      document.getElementById('modal-overlay')?.addEventListener('click', e=>{
+        if (e.target===document.getElementById('modal-overlay')) closeVideoModal();
+      });
+      // Escape key
+      document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeVideoModal(); });
+    },
+
+    handleGridClick(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const { action, exerciseId, exerciseName } = { ...btn.dataset, action:btn.dataset.action };
+      if (action==='start')          this.onTimerStart(exerciseId);
+      else if (action==='pause')     this.onTimerPause(exerciseId);
+      else if (action==='reset')     this.onTimerReset(exerciseId);
+      else if (action==='watch-exercise') this.onWatchExercise(btn.dataset.exerciseName);
+    },
+
+    handleGridChange(e) {
+      const el = e.target;
+      if (el.dataset.action==='toggle-checklist')
+        this.onChecklistToggle(el.dataset.exerciseId, el.checked);
+    },
+
+    handleDocClick(e) {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const action = btn.dataset.action;
+      switch(action) {
+        case 'switch-tab':          this.onTabChange(btn.dataset.tab); break;
+        case 'add-preset':          this.onAddPreset(); break;
+        case 'delete-preset':       this.onDeletePreset(btn.dataset.presetId); break;
+        case 'complete-session':    this.onCompleteSession(); break;
+        case 'new-week':            newWeek(); break;
+        case 'close-modal':         closeVideoModal(); break;
+        case 'lang-toggle':         this.onLanguageToggle(); break;
+        case 'add-exercise-row':    Renderer.addExerciseRow(); break;
+        case 'remove-exercise-row': btn.closest('.exercise-row')?.remove(); break;
+        case 'save-preset':         this.onSavePreset(); break;
+        case 'cancel-preset':       Renderer.renderPresetForm(false); break;
+        case 'sign-in':             this.onSignIn(); break;
+        case 'sign-out':            this.onSignOut(); break;
+      }
+    },
+
+    handleDocChange(e) {
+      const el = e.target;
+      if (el.dataset.action==='change-preset') this.onPresetChange(el.value);
+      if (el.dataset.action==='change-target') this.onTargetChange(el.value);
+    },
+
+    // ---- Timer ----
+    onTimerStart(id) {
+      TimerManager.start(id,
+        rem=>{ const d=document.getElementById(`timer-display-${id}`); if(d) d.textContent=rem; },
+        ()=>Renderer.renderExerciseCards()
+      );
+      Renderer.renderExerciseCards();
+    },
+    onTimerPause(id)  { TimerManager.pause(id);  Renderer.renderExerciseCards(); },
+    onTimerReset(id)  { TimerManager.reset(id);  Renderer.renderExerciseCards(); },
+
+    // ---- Watch exercise — buka YouTube search di tab baru ----
+    onWatchExercise(exerciseName) {
+      window.open(buildYouTubeSearchUrl(exerciseName), '_blank');
+    },
+
+    // ---- Checklist ----
+    onChecklistToggle(id, checked) {
+      AppState.checklist[id] = checked;
+      Storage.save(Storage.KEYS.CHECKLIST, AppState.checklist);
+      if (AppState.currentUser && FIREBASE_ENABLED) CloudSync.save();
+      document.querySelector(`.exercise-card[data-exercise-id="${id}"]`)?.classList.toggle('done', checked);
+    },
+
+    // ---- Tab ----
+    onTabChange(tab) {
+      if (AppState.activeTab===tab) return;
+      TimerManager.clearAll();
+      AppState.activeTab = tab;
+      Storage.save(Storage.KEYS.ACTIVE_TAB, tab);
+      Renderer.renderTabs();
+      Renderer.renderExerciseCards();
+    },
+
+    // ---- Preset ----
+    onPresetChange(id) {
+      if (AppState.activePresetId===id) return;
+      TimerManager.clearAll();
+      AppState.activePresetId = id;
+      AppState.checklist = {};
+      persistAll();
+      Renderer.renderAll();
+    },
+
+    onCompleteSession() {
+      AppState.sessionsCompleted += 1;
+      Storage.save(Storage.KEYS.SESSIONS_COMPLETED, AppState.sessionsCompleted);
+      if (AppState.currentUser && FIREBASE_ENABLED) CloudSync.save();
+      Renderer.renderWeeklyTracker();
+    },
+
+    onTargetChange(val) {
+      const n = parseInt(val,10);
+      if (isNaN(n)||n<1||n>14) return;
+      AppState.weeklyTarget = n;
+      Storage.save(Storage.KEYS.WEEKLY_TARGET, n);
+      if (AppState.currentUser && FIREBASE_ENABLED) CloudSync.save();
+      Renderer.renderWeeklyTracker();
+    },
+
+    onLanguageToggle() {
+      AppState.language = AppState.language==='id'?'en':'id';
+      Storage.save(Storage.KEYS.LANGUAGE, AppState.language);
+      if (AppState.currentUser && FIREBASE_ENABLED) CloudSync.save();
+      Renderer.renderAll();
+    },
+
+    onAddPreset()    { Renderer.renderPresetForm(true); },
+
+    onSavePreset() {
+      const nameInput = document.getElementById('new-preset-name');
+      const errorEl   = document.getElementById('preset-form-error');
+      const rows = document.querySelectorAll('#exercise-row-list .exercise-row');
+      const name = nameInput?.value || '';
+      const exercises = Array.from(rows).map((row,idx)=>({
+        id:`custom-${Date.now().toString(36)}-${idx}`,
+        name: row.querySelector('.ex-name-input')?.value?.trim() || `Exercise ${idx+1}`,
+        category: row.querySelector('.ex-category-select')?.value || 'warmup',
+        type:     row.querySelector('.ex-type-select')?.value || 'reps',
+        value:    parseInt(row.querySelector('.ex-value-input')?.value,10)||10,
+        unit:     row.querySelector('.ex-type-select')?.value==='time'?'seconds':'reps',
+      }));
+      const result = PresetManager.add(name, exercises);
+      if (!result.success) { if(errorEl) errorEl.textContent=result.error; return; }
+      AppState.activePresetId = result.preset.id;
+      AppState.checklist = {};
+      Renderer.renderPresetForm(false);
+      Renderer.renderAll();
+    },
+
+    onDeletePreset(id) {
+      if (!confirm(t('confirmDeletePreset'))) return;
+      const r = PresetManager.delete(id);
+      if (!r.success) { alert(r.error); return; }
+      Renderer.renderAll();
+    },
+
+    // ---- Firebase Auth ----
+    async onSignIn() {
+      if (!FIREBASE_ENABLED) { alert(t('labelFirebaseNotConfigured')); return; }
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await _auth.signInWithPopup(provider);
+      } catch(e) {
+        console.error('[Auth] sign-in failed:', e);
+        if (e.code !== 'auth/popup-closed-by-user') alert('Sign-in failed: ' + (e.message||e));
+      }
+    },
+
+    async onSignOut() {
+      if (!FIREBASE_ENABLED) return;
+      try {
+        CloudSync.stopListener();
+        await _auth.signOut();
+      } catch(e) { console.error('[Auth] sign-out failed:', e); }
+    },
+  };
+
+  // ================================================================
+  // MODULE 12: APP INITIALIZATION
+  // ================================================================
+  function initApp() {
+    initStateFromStorage();
+
+    if (!AppState.localStorageAvailable) {
+      const b = document.getElementById('banner-warning');
+      if (b) { b.textContent = t('errLocalStorage'); b.classList.add('visible'); }
+    }
+
+    if (!FIREBASE_ENABLED) {
+      const b = document.getElementById('banner-info');
+      if (b) { b.textContent = t('labelFirebaseNotConfigured'); b.classList.add('visible'); }
+    }
+
+    if (!PresetManager.getById(AppState.activePresetId))
+      AppState.activePresetId = BUILT_IN_PRESETS[0].id;
+
+    const preset = PresetManager.getById(AppState.activePresetId);
+    if (preset) preset.exercises.filter(ex=>ex.type==='time').forEach(ex=>TimerManager.init(ex.id,ex.value));
+
+    Renderer.renderAll();
+    EventController.init();
+
+    if (FIREBASE_ENABLED) {
+      _auth.onAuthStateChanged(async (user) => {
+        AppState.currentUser = user;
+        if (user) {
+          await CloudSync.load();
+          if (!PresetManager.getById(AppState.activePresetId))
+            AppState.activePresetId = BUILT_IN_PRESETS[0].id;
+          const p2 = PresetManager.getById(AppState.activePresetId);
+          if (p2) p2.exercises.filter(ex=>ex.type==='time').forEach(ex=>TimerManager.init(ex.id,ex.value));
+          CloudSync.startListener();
+        } else {
+          CloudSync.stopListener();
+          initStateFromStorage();
+          if (!PresetManager.getById(AppState.activePresetId))
+            AppState.activePresetId = BUILT_IN_PRESETS[0].id;
+        }
+        Renderer.renderAll();
+      });
+    }
+
+    console.log('[Workout Tracker] App initialized. Firebase:', FIREBASE_ENABLED);
+  }
+
+  document.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>

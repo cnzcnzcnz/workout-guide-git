@@ -1,0 +1,8 @@
+.kiro/
+.vscode/
+.git/
+.gitignore
+.dockerignore
+Dockerfile
+README.md
+*.md

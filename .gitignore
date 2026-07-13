@@ -1,0 +1,15 @@
+# Firebase config (berisi API key spesifik project)
+firebase-config.js
+
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+workout-tracker.tar
+.kiro/

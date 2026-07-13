@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  workout-tracker:
+    build: .
+    ports:
+      - "9999:80"
+    restart: unless-stopped
+    # Optional: mount firebase-config.js dari host agar bisa ganti tanpa rebuild
+    # volumes:
+    #   - ./firebase-config.js:/usr/share/nginx/html/firebase-config.js:ro
