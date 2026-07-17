@@ -736,6 +736,7 @@
     // Firebase / auth
     currentUser:      null,
     isSyncing:        false,
+    lastChecklistDate: null,  // ISO date string "2024-01-15" — untuk auto-reset per hari
   };
 
   // ================================================================
@@ -747,6 +748,7 @@
       CHECKLIST:"wt_checklist", WEEKLY_TARGET:"wt_weeklyTarget",
       SESSIONS_COMPLETED:"wt_sessionsCompleted", HISTORY:"wt_history",
       CUSTOM_PRESETS:"wt_customPresets", LANGUAGE:"wt_language",
+      LAST_CHECKLIST_DATE:"wt_lastChecklistDate",
     },
     isAvailable() {
       try { const k="__wt__"; localStorage.setItem(k,"1"); localStorage.removeItem(k); return true; }
@@ -797,6 +799,18 @@
     if (Array.isArray(s.history)) AppState.history = s.history;
     if (Array.isArray(s.customPresets)) AppState.customPresets = s.customPresets;
     if (s.language==="id"||s.language==="en") AppState.language = s.language;
+
+    // --- Daily checklist auto-reset ---
+    const today = new Date().toISOString().split('T')[0];
+    const lastDate = Storage.load(Storage.KEYS.LAST_CHECKLIST_DATE, null);
+    if (lastDate && lastDate !== today) {
+      // Hari berubah: reset checklist (progress sesi mingguan tetap)
+      AppState.checklist = {};
+      Storage.save(Storage.KEYS.CHECKLIST, {});
+    }
+    // Simpan hari ini sebagai tanggal checklist terakhir
+    AppState.lastChecklistDate = today;
+    Storage.save(Storage.KEYS.LAST_CHECKLIST_DATE, today);
   }
 
   // ================================================================
@@ -1177,6 +1191,13 @@
     renderWeeklyTracker() {
       const tracker = document.getElementById('weekly-tracker');
       if (!tracker) return;
+      // Weekly target hanya untuk Strength training
+      if (AppState.activeTab !== 'strength') {
+        tracker.innerHTML = '';
+        tracker.style.display = 'none';
+        return;
+      }
+      tracker.style.display = '';
       const pct = AppState.weeklyTarget>0
         ? Math.min(100, Math.round((AppState.sessionsCompleted/AppState.weeklyTarget)*100)) : 0;
       const achieved = AppState.sessionsCompleted>=AppState.weeklyTarget;
@@ -1206,6 +1227,13 @@
     renderHistory() {
       const panel = document.getElementById('history-panel');
       if (!panel) return;
+      // History hanya relevan untuk Strength training
+      if (AppState.activeTab !== 'strength') {
+        panel.innerHTML = '';
+        panel.style.display = 'none';
+        return;
+      }
+      panel.style.display = '';
       let listHtml = AppState.history.length===0
         ? `<p class="no-history-msg">${t('labelNoHistory')}</p>`
         : `<div class="history-list">` + AppState.history.map(entry=>{
